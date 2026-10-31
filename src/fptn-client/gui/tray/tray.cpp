@@ -16,12 +16,18 @@ Distributed under the MIT License (https://opensource.org/licenses/MIT)
 #include <spdlog/spdlog.h>  // NOLINT(build/include_order)
 
 #include <QDesktopServices>  // NOLINT(build/include_order)
+#include <QDialog>           // NOLINT(build/include_order)
+#include <QDialogButtonBox>  // NOLINT(build/include_order)
 #include <QFuture>           // NOLINT(build/include_order)
 #include <QFutureWatcher>    // NOLINT(build/include_order)
 #include <QIcon>             // NOLINT(build/include_order)
+#include <QLabel>            // NOLINT(build/include_order)
+#include <QLineEdit>         // NOLINT(build/include_order)
 #include <QMessageBox>       // NOLINT(build/include_order)
+#include <QPixmap>           // NOLINT(build/include_order)
 #include <QStyleFactory>     // NOLINT(build/include_order)
 #include <QStyleHints>       // NOLINT(build/include_order)
+#include <QVBoxLayout>       // NOLINT(build/include_order)
 #include <QtConcurrent>      // NOLINT(build/include_order)
 
 #include "common/network/ip_packet.h"
@@ -906,6 +912,7 @@ bool TrayApp::startVpn(QString& err_msg) {
     return false;
   }
 
+  const std::string vk_call_link = settings_->VkCallLink().toStdString();
   fptn::config::ConfigFile config(sni, censorship_strategy);  // SET SNI
   if (smart_connect_) {  // find the best server
     for (const auto& service : settings_->Services()) {
@@ -924,13 +931,22 @@ bool TrayApp::startVpn(QString& err_msg) {
         config.AddServer(cfg_server);
       }
     }
-    const auto login_result = config.FindServerByLogin(10);
-    if (!login_result) {
-      err_msg = QObject::tr("All servers unavailable!");
-      return false;
+    if (!vk_call_link.empty()) {
+      // Through VK TURN the servers are not reachable directly to race them
+      if (config.GetServers().empty()) {
+        err_msg = QObject::tr("All servers unavailable!");
+        return false;
+      }
+      selected_server_ = config.GetServers().front();
+    } else {
+      const auto login_result = config.FindServerByLogin(10);
+      if (!login_result) {
+        err_msg = QObject::tr("All servers unavailable!");
+        return false;
+      }
+      selected_server_ = login_result->server;
+      pre_obtained_token_ = login_result->access_token;
     }
-    selected_server_ = login_result->server;
-    pre_obtained_token_ = login_result->access_token;
   }
 
   const auto server_ip = fptn::routing::ResolveDomain(selected_server_.host);
@@ -956,12 +972,46 @@ bool TrayApp::startVpn(QString& err_msg) {
     connection_strategy = ConnectionStrategy::kTripleRollingTunnel;
   }
 
+  /* VK calls TURN bypass: connect through a local relay endpoint */
+  auto connect_ip = server_ip;
+  auto connect_port = static_cast<std::uint16_t>(selected_server_.port);
+  std::vector<std::string> vk_turn_bypass_addresses;
+  if (!vk_call_link.empty()) {
+    vk_turn_stopping_ = false;
+    auto tunnel = std::make_unique<fptn::protocol::vk_turn::VkTurnTunnel>(
+        fptn::protocol::vk_turn::VkTurnTunnel::Config{
+            .call_link = vk_call_link,
+            .server_ip = server_ip.ToString(),
+            .server_port = static_cast<std::uint16_t>(selected_server_.port),
+            .captcha_solver =
+                [this](const fptn::protocol::vk_turn::CaptchaChallenge& c) {
+                  return SolveVkCaptcha(c);
+                },
+        });
+    if (!tunnel->Start()) {
+      err_msg = QObject::tr("Unable to connect through VK calls.") + "\n\n" +
+                QObject::tr("Error message: ") +
+                QString::fromStdString(tunnel->LatestError());
+      return false;
+    }
+    connect_ip = fptn::common::network::IPv4Address("127.0.0.1");
+    connect_port = tunnel->LocalPort();
+    vk_turn_bypass_addresses = tunnel->BypassAddresses();
+    {
+      const std::unique_lock<std::mutex> lock(mutex_);  // mutex
+      vk_turn_tunnel_ = std::move(tunnel);
+    }
+  }
+
+  if (cancel_connecting_) {
+    return false;
+  }
+
   auto http_client = std::make_unique<fptn::vpn::http::Client>(
       fptn::protocol::https::ConnectionConfig{
           .common ={
-                  .server_ip = server_ip,
-                  .server_port =
-                      static_cast<std::uint16_t>(selected_server_.port),
+                  .server_ip = connect_ip,
+                  .server_port = connect_port,
                   .sni = sni,
                   .md5_fingerprint = selected_server_.md5_fingerprint,
                   .client_version = FPTN_VERSION,
@@ -1037,6 +1087,9 @@ bool TrayApp::startVpn(QString& err_msg) {
     for (const auto& network : exclude_networks) {
       exclude_networks_std.push_back(network.toStdString());
     }
+  }
+  for (const auto& address : vk_turn_bypass_addresses) {
+    exclude_networks_std.push_back(address + "/32");
   }
   std::vector<std::string> include_networks_std;
   if (!include_networks.empty()) {
@@ -1169,7 +1222,71 @@ bool TrayApp::stopVpn() {
   if (vpn_client) {
     vpn_client->Stop();
   }
+
+  fptn::protocol::vk_turn::VkTurnTunnelPtr vk_turn_tunnel;
+  {
+    const std::unique_lock<std::mutex> lock(mutex_);  // mutex
+    vk_turn_tunnel = std::move(vk_turn_tunnel_);
+  }
+  if (vk_turn_tunnel) {
+    vk_turn_stopping_ = true;  // abandons a pending captcha
+    vk_turn_tunnel->Stop();
+  }
   return true;
+}
+
+std::string TrayApp::SolveVkCaptcha(
+    const fptn::protocol::vk_turn::CaptchaChallenge& challenge) {
+  // Called from a worker thread: show the dialog on the GUI thread and wait
+  // without blocking it, so a disconnect can abandon the captcha.
+  auto answer = std::make_shared<std::promise<std::string>>();
+  auto result = answer->get_future();
+  QMetaObject::invokeMethod(
+      this,
+      [this, challenge, answer]() {
+        if (vk_turn_stopping_) {
+          answer->set_value({});
+          return;
+        }
+        QDialog dialog;
+        dialog.setWindowTitle(QObject::tr("VK captcha"));
+        auto* layout = new QVBoxLayout(&dialog);
+        layout->addWidget(new QLabel(
+            QObject::tr("VK asks to confirm that you are not a robot. Type "
+                        "the text from the picture:"),
+            &dialog));
+        auto* image = new QLabel(&dialog);
+        QPixmap pixmap;
+        if (pixmap.loadFromData(challenge.image.data(),
+                static_cast<uint>(challenge.image.size()))) {
+          image->setPixmap(pixmap);
+        } else {
+          image->setText(QString::fromStdString(challenge.image_url));
+          image->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        }
+        layout->addWidget(image);
+        auto* input = new QLineEdit(&dialog);
+        layout->addWidget(input);
+        auto* buttons = new QDialogButtonBox(
+            QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+        connect(
+            buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+        connect(
+            buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+        layout->addWidget(buttons);
+        const bool accepted = dialog.exec() == QDialog::Accepted;
+        answer->set_value(
+            accepted ? input->text().trimmed().toStdString() : std::string());
+      },
+      Qt::QueuedConnection);
+
+  while (result.wait_for(std::chrono::milliseconds(200)) !=
+         std::future_status::ready) {
+    if (vk_turn_stopping_ || cancel_connecting_) {
+      return {};
+    }
+  }
+  return result.get();
 }
 
 void TrayApp::handleVpnStarted(bool success, const QString& err_msg) {

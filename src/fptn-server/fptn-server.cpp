@@ -33,6 +33,7 @@ Distributed under the MIT License (https://opensource.org/licenses/MIT)
 #include "routing/route_manager.h"
 #include "statistic/metrics.h"
 #include "user/user_manager.h"
+#include "vk_turn/udp_gateway.h"
 #include "vpn/manager.h"
 #include "web/server.h"
 
@@ -171,7 +172,8 @@ int main(int argc, char* argv[]) {
         "ADS FILTER:           {}\n"
         "TORRENT FILTER:       {}\n"
         "SPAM FILTER:          {}\n"
-        "MAX_ACTIVE_SESSIONS_PER_USER: {}\n",
+        "MAX_ACTIVE_SESSIONS_PER_USER: {}\n"
+        "VK TURN PORT:      {}\n",
         FPTN_VERSION,
         // Network settings
         config->OutNetworkInterface(),
@@ -187,7 +189,10 @@ int main(int argc, char* argv[]) {
         config->EnableTorrentFilter() ? "YES" : "NO",
         config->EnableSpamFilter() ? "YES" : "NO",
         // max session
-        config->MaxActiveSessionsPerUser());
+        config->MaxActiveSessionsPerUser(),
+        // vk turn
+        config->VkTurnPort() ? std::to_string(config->VkTurnPort())
+                             : std::string("disabled"));
 
     // Init vpn manager
     fptn::vpn::Manager manager(
@@ -198,9 +203,24 @@ int main(int argc, char* argv[]) {
             .to_client_filter = to_client_filter_manager,
             .prometheus = prometheus});
 
+    /* VK calls TURN bypass: UDP gateway to the local HTTPS port */
+    fptn::vk_turn::UdpGatewayPtr vk_turn_gateway;
+    if (config->VkTurnPort() != 0) {
+      vk_turn_gateway = std::make_unique<fptn::vk_turn::UdpGateway>(
+          static_cast<std::uint16_t>(config->VkTurnPort()),
+          static_cast<std::uint16_t>(config->ServerPort()));
+    }
+
     /* start/wait/stop */
     manager.Start();
+    if (vk_turn_gateway && !vk_turn_gateway->Start()) {
+      manager.Stop();
+      return EXIT_FAILURE;
+    }
     WaitForSignal();
+    if (vk_turn_gateway) {
+      vk_turn_gateway->Stop();
+    }
     manager.Stop();
 
     return EXIT_SUCCESS;

@@ -269,6 +269,7 @@ class FPTN(ConanFile):
         if self.options.build_only_fptn_lib:
             self.cpp_info.libs = [
                 "fptn-protocol-lib_static",
+                "fptn_kcp",
                 "ntp_client",
                 "camouflage-tls",
                 "yaff_proto",

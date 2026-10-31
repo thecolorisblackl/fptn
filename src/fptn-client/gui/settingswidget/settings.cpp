@@ -360,6 +360,23 @@ void SettingsWidget::SetupUi() {
   server_table_->setMinimumHeight(120);
 
   grid_layout_->addWidget(server_table_, 11, 0, 1, 2);
+
+  vk_call_link_label_ =
+      new QLabel(QObject::tr("VK call link (bypass via VK calls)"), this);
+  vk_call_link_label_->setWordWrap(true);
+  vk_call_link_line_edit_ = new QLineEdit(this);
+  vk_call_link_line_edit_->setText(settings_->VkCallLink());
+  vk_call_link_line_edit_->setPlaceholderText("https://vk.com/call/join/...");
+  vk_call_link_line_edit_->setToolTip(
+      QObject::tr("Connect through the TURN servers of VK calls. The server "
+                  "must have this method enabled. Leave empty to connect "
+                  "directly."));
+  vk_call_link_line_edit_->setSizePolicy(
+      QSizePolicy::Expanding, QSizePolicy::Fixed);
+  connect(vk_call_link_line_edit_, &QLineEdit::textChanged, this,
+      [this](const QString& text) { settings_->SetVkCallLink(text); });
+  grid_layout_->addWidget(vk_call_link_label_, 12, 0, Qt::AlignLeft);
+  grid_layout_->addWidget(vk_call_link_line_edit_, 12, 1);
   grid_layout_->setRowStretch(11, 1);
 
   settings_scroll_area->setWidget(settings_content_widget);
@@ -1326,6 +1343,10 @@ void SettingsWidget::onLanguageChanged(const QString&) {
         QObject::tr("com\nanother.com\nsub.domainname.com"));
   }
 
+  if (vk_call_link_label_) {
+    vk_call_link_label_->setText(
+        QObject::tr("VK call link (bypass via VK calls)"));
+  }
   if (custom_dns_label_) {
     custom_dns_label_->setText(QObject::tr("Custom DNS"));
   }

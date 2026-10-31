@@ -26,6 +26,7 @@ Distributed under the MIT License (https://opensource.org/licenses/MIT)
 #include "common/network/net_interface.h"
 
 #include "config/config_file.h"
+#include "fptn-protocol-lib/vk_turn/vk_turn_tunnel.h"
 #include "gui/settingsmodel/settingsmodel.h"
 #include "gui/settingswidget/settings.h"
 #include "gui/speedwidget/speedwidget.h"
@@ -79,6 +80,8 @@ class TrayApp : public QWidget {
  protected:
   bool startVpn(QString& err_msg);
   bool stopVpn();
+  std::string SolveVkCaptcha(
+      const fptn::protocol::vk_turn::CaptchaChallenge& challenge);
 
   void CheckForUpdatesAsync();
 
@@ -118,6 +121,9 @@ class TrayApp : public QWidget {
   QString inactive_icon_path_;
 
   fptn::vpn::VpnClientPtr vpn_client_;
+  // VK calls TURN bypass, empty when connecting directly
+  fptn::protocol::vk_turn::VkTurnTunnelPtr vk_turn_tunnel_;
+  std::atomic<bool> vk_turn_stopping_{false};
 
   // connecting
   std::atomic<bool> connecting_in_progress_{false};

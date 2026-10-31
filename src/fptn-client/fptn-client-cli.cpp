@@ -30,6 +30,7 @@ Distributed under the MIT License (https://opensource.org/licenses/MIT)
 #include "config/config_file.h"
 #include "fptn-protocol-lib/https/obfuscator/methods/detector.h"
 #include "fptn-protocol-lib/time/time_provider.h"
+#include "fptn-protocol-lib/vk_turn/vk_turn_tunnel.h"
 #include "plugins/adblock/adblock.h"
 #include "plugins/blacklist/domain_blacklist.h"
 #include "routing/route_manager.h"
@@ -217,6 +218,19 @@ int main(int argc, char* argv[]) {
           }
           return v;
         });
+    // VK calls TURN bypass
+    args.add_argument("--vk-call-link")
+        .default_value("")
+        .help(
+            "Bypass method: reach the server through the TURN servers of VK "
+            "calls.\n"
+            "Value: a VK call link (https://vk.com/call/join/...) or its id.\n"
+            "The server must run with --vk-turn-port.");
+    args.add_argument("--vk-turn-port")
+        .default_value("0")
+        .help(
+            "UDP port of the server for --vk-call-link "
+            "(default: the server port)");
     // networks
     args.add_argument("--exclude-tunnel-networks")
         .default_value(FPTN_CLIENT_DEFAULT_EXCLUDE_NETWORKS)
@@ -446,12 +460,33 @@ int main(int argc, char* argv[]) {
     fptn::config::ConfigFile config(access_token, sni, censorship_strategy);
     fptn::utils::speed_estimator::ServerInfo selected_server;
     std::string pre_obtained_token;
+    const auto vk_call_link = args.get<std::string>("--vk-call-link");
     try {
       config.Parse();
+      if (!vk_call_link.empty()) {
+        // The servers are not reachable directly: no login race, take the
+        // preferred server or the first one.
+        const auto names =
+            fptn::common::utils::SplitCommaSeparated(preferred_servers);
+        std::optional<fptn::utils::speed_estimator::ServerInfo> server;
+        if (!names.empty()) {
+          server = config.GetServer(names.front());
+        }
+        if (!server && !config.GetServers().empty()) {
+          server = config.GetServers().front();
+        }
+        if (!server) {
+          SPDLOG_ERROR("No servers in the access token!");
+          return EXIT_FAILURE;
+        }
+        selected_server = std::move(*server);
+      }
       const auto preferred_names =
           fptn::common::utils::SplitCommaSeparated(preferred_servers);
-      bool use_login_race = preferred_names.empty();
-      if (preferred_names.size() == 1) {
+      bool use_login_race = preferred_names.empty() && vk_call_link.empty();
+      if (!vk_call_link.empty()) {
+        // already selected above
+      } else if (preferred_names.size() == 1) {
         auto server_opt = config.GetServer(preferred_names.front());
         if (server_opt.has_value()) {
           selected_server = std::move(*server_opt);
@@ -524,13 +559,55 @@ int main(int argc, char* argv[]) {
         enable_split_tunnel ? "enabled" : "disabled", tunnel_mode,
         split_domains_str, blacklist_domains_str);
 
+    /* VK calls TURN bypass: connect through a local relay endpoint */
+    fptn::protocol::vk_turn::VkTurnTunnelPtr vk_turn_tunnel;
+    fptn::common::network::IPv4Address connect_ip = server_ip;
+    auto connect_port = static_cast<std::uint16_t>(selected_server.port);
+    std::vector<std::string> bypass_networks = exclude_networks;
+    if (!vk_call_link.empty()) {
+      int vk_turn_port = 0;
+      try {
+        vk_turn_port = std::stoi(args.get<std::string>("--vk-turn-port"));
+      } catch (const std::exception&) {
+        vk_turn_port = -1;
+      }
+      if (vk_turn_port < 0 || vk_turn_port > 65535) {
+        SPDLOG_ERROR("Invalid --vk-turn-port");
+        return EXIT_FAILURE;
+      }
+      vk_turn_tunnel = std::make_unique<fptn::protocol::vk_turn::VkTurnTunnel>(
+          fptn::protocol::vk_turn::VkTurnTunnel::Config{
+              .call_link = vk_call_link,
+              .server_ip = server_ip.ToString(),
+              .server_port = static_cast<std::uint16_t>(
+                  vk_turn_port ? vk_turn_port : selected_server.port),
+              .captcha_solver =
+                  [](const fptn::protocol::vk_turn::CaptchaChallenge& c) {
+                    std::cout << "VK asks to solve a captcha. Open "
+                              << c.image_url
+                              << " and type the text here: " << std::flush;
+                    std::string answer;
+                    std::getline(std::cin, answer);
+                    return answer;
+                  },
+          });
+      if (!vk_turn_tunnel->Start()) {
+        SPDLOG_ERROR("VK TURN tunnel error: {}", vk_turn_tunnel->LatestError());
+        return EXIT_FAILURE;
+      }
+      connect_ip = fptn::common::network::IPv4Address::Create("127.0.0.1");
+      connect_port = vk_turn_tunnel->LocalPort();
+      for (const auto& address : vk_turn_tunnel->BypassAddresses()) {
+        bypass_networks.push_back(address + "/32");
+      }
+    }
+
     /* auth & dns */
     auto http_client = std::make_unique<fptn::vpn::http::Client>(
         fptn::protocol::https::ConnectionConfig{
             .common ={
-                    .server_ip = server_ip,
-                    .server_port =
-                        static_cast<std::uint16_t>(selected_server.port),
+                    .server_ip = connect_ip,
+                    .server_port = connect_port,
                     .sni = sni,
                     .md5_fingerprint = selected_server.md5_fingerprint,
                     .client_version = FPTN_VERSION,
@@ -579,7 +656,7 @@ int main(int argc, char* argv[]) {
             .dns_server_ipv6 = dns_server_ipv6,
             .gateway_ipv4 = gateway_ip,
             .gateway_ipv6 = gateway_ipv6,
-            .exclude_networks = exclude_networks,
+            .exclude_networks = bypass_networks,
             .include_networks = include_networks
 #if _WIN32
             ,
@@ -622,6 +699,9 @@ int main(int argc, char* argv[]) {
     /* clean */
     route_manager->Clean();
     vpn_client.Stop();
+    if (vk_turn_tunnel) {
+      vk_turn_tunnel->Stop();
+    }
     spdlog::shutdown();
     return EXIT_SUCCESS;
   } catch (const std::exception& ex) {
