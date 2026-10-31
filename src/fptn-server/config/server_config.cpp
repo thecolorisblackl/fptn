@@ -72,6 +72,13 @@ ServerConfig::ServerConfig(int argc, char* argv[])
       .action([](const std::string& v) -> int {
         return ParseInt(v, 443, 1, 65535);
       });
+  args_.add_argument("--vk-turn-port")
+      .default_value(0)
+      .help(
+          "UDP port for clients that connect through the TURN servers of VK "
+          "calls (the VK call bypass method). 0 (default) disables it.")
+      .action(
+          [](const std::string& v) -> int { return ParseInt(v, 0, 0, 65535); });
   args_.add_argument("--mtu-size")
       .default_value(FPTN_DEFAULT_MTU_SIZE)
       .help("MTU size")
@@ -283,6 +290,10 @@ std::string ServerConfig::OutNetworkInterface() const {
 }
 
 int ServerConfig::ServerPort() const { return args_.get<int>("--server-port"); }
+
+int ServerConfig::VkTurnPort() const {
+  return args_.get<int>("--vk-turn-port");
+}
 
 std::string ServerConfig::TunInterfaceName() const {
   return args_.get<std::string>("--tun-interface-name");

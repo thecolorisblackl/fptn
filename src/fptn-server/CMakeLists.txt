@@ -78,6 +78,8 @@ add_executable(
   filter/filters/adblock/adblock.cpp
   filter/domain_list/domain_list.h
   filter/domain_list/domain_list.cpp
+  vk_turn/udp_gateway.h
+  vk_turn/udp_gateway.cpp
   vpn/manager.h
   vpn/manager.cpp
   statistic/metrics.h

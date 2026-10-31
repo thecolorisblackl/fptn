@@ -39,6 +39,7 @@ Key Technical Features:
     - **SNI Spoofing:** A fake domain name is set in the TLS ClientHello packet that initiates the connection. Traffic analysis systems observe a legitimate TLS connection, while the traffic is actually routed to the VPN server.
     - **Obfuscation:** The traffic is disguised as an already established TLS session, hiding the initial TLS handshake and preventing detection by DPI systems.
     - **Reality Mode with SNI Spoofing:** The client initiates a connection to the VPN server using a spoofed Server Name Indication (SNI), receives a genuine TLS handshake response from the actual (spoofed) website, and then continues data exchange with the VPN server within the same connection.
+  - **Through VK calls (TURN):** the client joins a VK call anonymously by its link, gets access to the TURN servers of the call and relays its traffic through them to a UDP port of the server. Inside runs the regular FPTN connection (TLS over KCP), so the methods above still apply. The server enables it with `--vk-turn-port` (in Docker: `ENABLE_VK_TURN=true`, UDP on the HTTPS port), the client with a call link in the settings (`--vk-call-link` for the CLI client). If VK asks for a captcha, the desktop client shows it in a dialog.
   - The desktop client includes an integrated `SNI scanner utility`.
 
 3. Transport Protocol

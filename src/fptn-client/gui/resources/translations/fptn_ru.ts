@@ -508,6 +508,26 @@ This may cause network connectivity issues or prevent proper operation of FPTN.<
             <translation>Пользовательский DNS</translation>
         </message>
         <message>
+            <source>VK call link (bypass via VK calls)</source>
+            <translation>Ссылка на звонок VK (обход через звонки VK)</translation>
+        </message>
+        <message>
+            <source>Connect through the TURN servers of VK calls. The server must have this method enabled. Leave empty to connect directly.</source>
+            <translation>Подключаться через TURN-серверы звонков VK. На сервере этот метод должен быть включён. Оставьте пустым для прямого подключения.</translation>
+        </message>
+        <message>
+            <source>Unable to connect through VK calls.</source>
+            <translation>Не удалось подключиться через звонки VK.</translation>
+        </message>
+        <message>
+            <source>VK captcha</source>
+            <translation>Капча VK</translation>
+        </message>
+        <message>
+            <source>VK asks to confirm that you are not a robot. Type the text from the picture:</source>
+            <translation>VK просит подтвердить, что вы не робот. Введите текст с картинки:</translation>
+        </message>
+        <message>
             <source>Please enter a valid DNS IPv4 address or enable Auto.</source>
             <translation>Введите корректный IPv4-адрес DNS или включите «Авто».</translation>
         </message>

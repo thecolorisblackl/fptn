@@ -508,6 +508,26 @@ This may cause network connectivity issues or prevent proper operation of FPTN.<
             <translation>Custom DNS</translation>
         </message>
         <message>
+            <source>VK call link (bypass via VK calls)</source>
+            <translation>VK call link (bypass via VK calls)</translation>
+        </message>
+        <message>
+            <source>Connect through the TURN servers of VK calls. The server must have this method enabled. Leave empty to connect directly.</source>
+            <translation>Connect through the TURN servers of VK calls. The server must have this method enabled. Leave empty to connect directly.</translation>
+        </message>
+        <message>
+            <source>Unable to connect through VK calls.</source>
+            <translation>Unable to connect through VK calls.</translation>
+        </message>
+        <message>
+            <source>VK captcha</source>
+            <translation>VK captcha</translation>
+        </message>
+        <message>
+            <source>VK asks to confirm that you are not a robot. Type the text from the picture:</source>
+            <translation>VK asks to confirm that you are not a robot. Type the text from the picture:</translation>
+        </message>
+        <message>
             <source>Please enter a valid DNS IPv4 address or enable Auto.</source>
             <translation>Please enter a valid DNS IPv4 address or enable Auto.</translation>
         </message>

@@ -30,6 +30,7 @@ class ServerConfig {
   [[nodiscard]] std::string ServerKey() const;
   [[nodiscard]] std::string OutNetworkInterface() const;
   [[nodiscard]] int ServerPort() const;
+  [[nodiscard]] int VkTurnPort() const;
 
   [[nodiscard]] std::string TunInterfaceName() const;
   /* IPv4 */

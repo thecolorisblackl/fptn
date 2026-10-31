@@ -77,6 +77,7 @@ services:
       - /dev/net/tun:/dev/net/tun
     ports:
       - "${FPTN_PORT}:443/tcp"
+      - "${FPTN_PORT}:443/udp"
     volumes:
       - ./fptn-server-data:/etc/fptn
     environment:
@@ -94,6 +95,7 @@ services:
       - REMOTE_SERVER_AUTH_HOST=${REMOTE_SERVER_AUTH_HOST}
       - REMOTE_SERVER_AUTH_PORT=${REMOTE_SERVER_AUTH_PORT}
       - MAX_ACTIVE_SESSIONS_PER_USER=${MAX_ACTIVE_SESSIONS_PER_USER}
+      - ENABLE_VK_TURN=${ENABLE_VK_TURN:-false}
       - SERVER_EXTERNAL_IPS=${SERVER_EXTERNAL_IPS}
       - MTU_SIZE=${MTU_SIZE:-1400}
       - USING_DNS_SERVER=unbound
@@ -195,6 +197,10 @@ PROMETHEUS_SECRET_ACCESS_KEY=
 
 # Max simultaneous sessions per VPN user.
 MAX_ACTIVE_SESSIONS_PER_USER=3
+
+# Accept clients that connect through the TURN servers of VK calls
+# (UDP on FPTN_PORT). (true/false)
+ENABLE_VK_TURN=false
 
 # ============================================
 # DNS SERVER

@@ -244,6 +244,9 @@ class SettingsModel : public QObject {
   QString CustomDns() const;
   void SetCustomDns(const QString& dns);
 
+  QString VkCallLink() const;
+  void SetVkCallLink(const QString& link);
+
 #if _WIN32
   bool EnableAdvancedDnsManagement() const;
   void SetEnableAdvancedDnsManagement(bool enable);
@@ -291,6 +294,7 @@ class SettingsModel : public QObject {
   QString split_tunnel_domains_;
 
   QString custom_dns_;
+  QString vk_call_link_;
 
   SNIManagerSPtr sni_manager_;
 };

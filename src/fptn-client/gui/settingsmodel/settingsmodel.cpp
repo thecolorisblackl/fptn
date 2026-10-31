@@ -451,6 +451,10 @@ void SettingsModel::Load(bool dont_load_server) {
           .IsValid()) {
     custom_dns_.clear();
   }
+
+  if (service_obj.contains("vk_call_link")) {
+    vk_call_link_ = service_obj["vk_call_link"].toString();
+  }
 }
 
 QString SettingsModel::LanguageName() const {
@@ -561,6 +565,7 @@ bool SettingsModel::Save() {
   json_object["split_tunnel_mode"] = split_tunnel_mode_;
   json_object["split_tunnel_domains"] = split_tunnel_domains_;
   json_object["custom_dns"] = custom_dns_;
+  json_object["vk_call_link"] = vk_call_link_;
 
   const QJsonDocument document(json_object);
   const QByteArray data = Encrypt(document.toJson(), DerivedKey());
@@ -804,6 +809,13 @@ void SettingsModel::SetCustomDns(const QString& dns) {
   }
   Save();
 }
+QString SettingsModel::VkCallLink() const { return vk_call_link_; }
+
+void SettingsModel::SetVkCallLink(const QString& link) {
+  vk_call_link_ = link.trimmed();
+  Save();
+}
+
 #if _WIN32
 bool SettingsModel::EnableAdvancedDnsManagement() const {
   return enable_advanced_dns_management_;

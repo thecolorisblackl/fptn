@@ -34,3 +34,8 @@ set(LIBS
 add_executable(ApiClientTest api_client/ApiClientTest.cpp)
 target_link_libraries(ApiClientTest PRIVATE ${LIBS})
 add_test(NAME ApiClientTest COMMAND ApiClientTest)
+
+# --- VK TURN test ---
+add_executable(VkTurnTest vk_turn/VkTurnTest.cpp)
+target_link_libraries(VkTurnTest PRIVATE ${LIBS})
+add_test(NAME VkTurnTest COMMAND VkTurnTest)

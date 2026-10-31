@@ -3,11 +3,18 @@
 export OUT_NETWORK_INTERFACE=$(ip -o -4 route show to default | awk '{print $5}')
 echo "[FPTN] Using network interface: $OUT_NETWORK_INTERFACE"
 
+# VK calls TURN bypass: clients come over UDP 443 (the same port as HTTPS)
+VK_TURN_PORT=0
+if [ "${ENABLE_VK_TURN}" = "true" ]; then
+    VK_TURN_PORT=443
+fi
+
 exec /usr/local/bin/fptn-server \
     --server-key=/etc/fptn/server.key \
     --server-crt=/etc/fptn/server.crt \
     --out-network-interface="${OUT_NETWORK_INTERFACE}" \
     --server-port=4430 \
+    --vk-turn-port="${VK_TURN_PORT}" \
     --enable-detect-probing="${ENABLE_DETECT_PROBING}" \
     --allowed-sni-list="${ALLOWED_SNI_LIST}" \
     --tun-interface-name=fptn0 \

@@ -4,6 +4,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
 include(../../depends/cmake/NtpClient.cmake)
 include(../../depends/cmake/CamouflageTLS.cmake)
+include(../../depends/cmake/FetchKcp.cmake)
 find_package(YaFF CONFIG REQUIRED)
 if (IOS)
   find_library(SECURITY Security)
@@ -130,7 +131,17 @@ set(FPTN_CLIENT_PROTOCOL_SOURCES
     protocol/yaff/yaff_serializer.cpp
     time/time_provider.h
     time/time_provider.cpp
-    https/obfuscator/methods/detector.h)
+    https/obfuscator/methods/detector.h
+    vk_turn/stun.h
+    vk_turn/stun.cpp
+    vk_turn/turn_client.h
+    vk_turn/turn_client.cpp
+    vk_turn/kcp_pipe.h
+    vk_turn/kcp_pipe.cpp
+    vk_turn/vk_credentials.h
+    vk_turn/vk_credentials.cpp
+    vk_turn/vk_turn_tunnel.h
+    vk_turn/vk_turn_tunnel.cpp)
 
 add_library("${PROJECT_NAME}_static" STATIC ${FPTN_CLIENT_PROTOCOL_SOURCES})
 
@@ -184,6 +195,7 @@ foreach(target "${PROJECT_NAME}_static")
     re2::re2
     ntp_client
     camouflage-tls
+    fptn_kcp
     ${LIBIDN2_LIB}
     ${IOS_LIBS}
   )

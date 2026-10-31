@@ -89,6 +89,9 @@ class SettingsWidget : public QDialog {
   QCheckBox* custom_dns_auto_checkbox_ = nullptr;
   QLineEdit* custom_dns_line_edit_ = nullptr;
 
+  QLabel* vk_call_link_label_ = nullptr;
+  QLineEdit* vk_call_link_line_edit_ = nullptr;
+
   QLabel* connection_strategy_label_ = nullptr;
   QComboBox* connection_strategy_combo_box_ = nullptr;
 
